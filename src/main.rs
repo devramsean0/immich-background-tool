@@ -1,4 +1,7 @@
+use std::fs::DirEntry;
+
 use clap::Parser;
+use rand::Rng;
 use reqwest::header;
 
 mod immich;
@@ -37,12 +40,25 @@ fn main() {
         .unwrap();
 
     // try to download a new photo from immich
-    let image_path = match immich::get_image_from_immich(client, cache_dir_root) {
+    let image_path = match immich::get_image_from_immich(client, cache_dir_root.clone()) {
         Ok(path) => path,
         Err(e) => {
-            // We should instead pick an already downloaded image or the default
             println!("{e}");
-            return;
+            let files: Vec<DirEntry> = std::fs::read_dir(cache_dir_root)
+                .unwrap()
+                .filter_map(Result::ok)
+                .collect();
+            if files.is_empty() {
+                println!("{e}");
+                return;
+            }
+
+            let mut rng = rand::rng();
+            let idx = rng.random_range(0..files.len());
+            println!("Picked asset num {}", idx);
+            let asset = &files[idx];
+
+            asset.path().to_str().unwrap().to_string()
         }
     };
 
