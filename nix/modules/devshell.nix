@@ -11,7 +11,7 @@
         just
         nixd # Nix language server
         bacon
-        swaybg
+        swww
       ];
     };
   };

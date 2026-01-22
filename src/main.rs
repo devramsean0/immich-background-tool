@@ -2,6 +2,7 @@ use clap::Parser;
 use reqwest::header;
 
 mod immich;
+mod sway;
 
 #[derive(Parser, Debug)]
 #[clap(author = "Sean Outram", version, about)]
@@ -44,4 +45,6 @@ fn main() {
             return;
         }
     };
+
+    sway::issue_bg_update(image_path);
 }
