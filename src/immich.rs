@@ -1,13 +1,12 @@
 use anyhow::Error;
 use rand::Rng;
-use reqwest::StatusCode;
+use reqwest::{blocking::Client, StatusCode};
 use serde::Deserialize;
 use std::{env, fs};
 
-pub fn get_image_from_immich(
-    client: reqwest::blocking::Client,
-    base_path: String,
-) -> anyhow::Result<String> {
+use crate::utils;
+
+pub fn get_image_from_immich(client: Client, base_path: String) -> anyhow::Result<String> {
     let immich_base_path = env::var("IMMICH_ENDPOINT")?;
     let immich_album_id = env::var("IMMICH_ALBUM")?;
 
@@ -40,19 +39,27 @@ pub fn get_image_from_immich(
 
                 let path = format!("{}/{}", base_path, asset.original_file_name);
                 if fs::exists(path.clone())? {
-                    println!("Asset already exists, skipping download");
-                    return Ok(path);
+                    if utils::checksum::check_checksum_of_file(
+                        path.clone(),
+                        asset.checksum.clone(),
+                    )? {
+                        println!("Asset already exists, skipping download");
+                        return Ok(path);
+                    } else {
+                        download_asset(
+                            client.clone(),
+                            format!("{immich_base_path}/api/assets/{}/original", asset.id),
+                            path.clone(),
+                            asset.checksum.clone(),
+                        )?;
+                    }
                 } else {
-                    println!("Downloading asset");
-                    let raw = client
-                        .get(format!(
-                            "{immich_base_path}/api/assets/{}/original",
-                            asset.id
-                        ))
-                        .send()?
-                        .bytes()?;
-                    fs::write(path.clone(), raw)?;
-                    println!("Downloaded asset to {path}");
+                    download_asset(
+                        client.clone(),
+                        format!("{immich_base_path}/api/assets/{}/original", asset.id),
+                        path.clone(),
+                        asset.checksum.clone(),
+                    )?;
                     final_path = path;
                 }
             }
@@ -68,6 +75,22 @@ pub fn get_image_from_immich(
             )));
         }
     }
+}
+
+fn download_asset(
+    client: Client,
+    url: String,
+    path: String,
+    checksum: String,
+) -> anyhow::Result<()> {
+    println!("Downloading asset");
+    let raw = client.get(url).send()?.bytes()?;
+    fs::write(path.clone(), raw)?;
+    if !utils::checksum::check_checksum_of_file(path.clone(), checksum)? {
+        println!("Checksum invalid after download, uuuh");
+    }
+    println!("Downloaded asset to {path}");
+    return Ok(());
 }
 
 #[derive(Deserialize, PartialEq)]

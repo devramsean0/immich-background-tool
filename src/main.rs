@@ -6,6 +6,7 @@ use reqwest::header;
 
 mod immich;
 mod sway;
+mod utils;
 
 #[derive(Parser, Debug)]
 #[clap(author = "Sean Outram", version, about)]
