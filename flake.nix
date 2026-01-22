@@ -22,5 +22,11 @@
         map
           (fn: ./nix/modules/${fn})
           (attrNames (readDir ./nix/modules));
+      flake = {
+        # Expose the package for easy consumption as a flake input
+        overlays.default = final: prev: {
+          immich-background-tool = inputs.self.packages.${final.system}.immich-background-tool;
+        };
+      };
     };
 }
