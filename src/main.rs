@@ -1,4 +1,4 @@
-use std::fs::DirEntry;
+use std::{env, fs};
 
 use clap::Parser;
 use rand::Rng;
@@ -23,15 +23,15 @@ fn main() {
     dotenv::from_filename(env_file_path).unwrap();
     let cache_dir_root = format!(
         "{}/{}",
-        std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| String::from("/run")),
+        env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| String::from("/run")),
         "immich-background-tool/images"
     );
-    std::fs::create_dir_all(cache_dir_root.clone()).unwrap();
+    fs::create_dir_all(cache_dir_root.clone()).unwrap();
 
     let mut headers = header::HeaderMap::new();
     headers.insert(
         "x-api-key",
-        header::HeaderValue::from_str(&std::env::var("IMMICH_API_KEY").unwrap()).unwrap(),
+        header::HeaderValue::from_str(&env::var("IMMICH_API_KEY").unwrap()).unwrap(),
     );
 
     let client = reqwest::blocking::Client::builder()
@@ -44,7 +44,7 @@ fn main() {
         Ok(path) => path,
         Err(e) => {
             println!("{e}");
-            let files: Vec<DirEntry> = std::fs::read_dir(cache_dir_root)
+            let files: Vec<fs::DirEntry> = fs::read_dir(cache_dir_root)
                 .unwrap()
                 .filter_map(Result::ok)
                 .collect();

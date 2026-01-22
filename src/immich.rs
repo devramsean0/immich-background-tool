@@ -2,14 +2,14 @@ use anyhow::Error;
 use rand::Rng;
 use reqwest::StatusCode;
 use serde::Deserialize;
-use std::fs;
+use std::{env, fs};
 
 pub fn get_image_from_immich(
     client: reqwest::blocking::Client,
     base_path: String,
 ) -> anyhow::Result<String> {
-    let immich_base_path = std::env::var("IMMICH_ENDPOINT")?;
-    let immich_album_id = std::env::var("IMMICH_ALBUM")?;
+    let immich_base_path = env::var("IMMICH_ENDPOINT")?;
+    let immich_album_id = env::var("IMMICH_ALBUM")?;
 
     let album = client
         .get(format!("{immich_base_path}/api/albums/{immich_album_id}"))
@@ -56,8 +56,6 @@ pub fn get_image_from_immich(
                     final_path = path;
                 }
             }
-
-            //Ok(asset.id.clone())
             Ok(final_path)
         }
         _ => {
@@ -90,7 +88,6 @@ struct ImmichAlbumGetOK {
 #[derive(Deserialize)]
 struct ImmichRequestBad {
     message: Vec<String>,
-    error: String,
     #[serde(rename = "statusCode")]
     status_code: i64,
     #[serde(rename = "correlationId")]
