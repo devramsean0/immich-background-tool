@@ -1,9 +1,6 @@
 use base64::{engine, Engine};
 use sha1::{Digest, Sha1};
-use std::{
-    fs::File,
-    io::{self, Read},
-};
+use std::{fs::File, io::Read};
 
 pub fn check_checksum_of_file(path: String, checksum: String) -> anyhow::Result<bool> {
     let mut file = File::open(path)?;

@@ -16,7 +16,10 @@ struct Args {
     env_file_path: Option<String>,
 
     #[arg(long)]
-    sww_path: String,
+    swww_path: String,
+
+    #[arg(short, long)]
+    resize_mode: String,
 }
 
 fn main() {
@@ -66,5 +69,5 @@ fn main() {
         }
     };
 
-    sway::issue_bg_update(image_path, args.sww_path);
+    sway::issue_bg_update(image_path, args.swww_path, args.resize_mode);
 }
