@@ -14,6 +14,9 @@ mod utils;
 struct Args {
     #[arg()]
     env_file_path: Option<String>,
+
+    #[arg(long)]
+    sww_path: String,
 }
 
 fn main() {
@@ -63,5 +66,5 @@ fn main() {
         }
     };
 
-    sway::issue_bg_update(image_path);
+    sway::issue_bg_update(image_path, args.sww_path);
 }

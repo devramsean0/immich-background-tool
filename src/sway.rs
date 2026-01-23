@@ -1,7 +1,7 @@
 use std::process::Command;
 
-pub fn issue_bg_update(path: String) {
-    let output = Command::new("swww")
+pub fn issue_bg_update(path: String, sww_path: String) {
+    let output = Command::new(sww_path)
         .args(["img", path.as_str()])
         .output()
         .expect("Failed to execute command");
