@@ -3,8 +3,9 @@ use rand::Rng;
 use reqwest::{Client, StatusCode};
 use serde::Deserialize;
 use std::{env, fs};
+use tokio::time::{sleep, Duration};
 
-use crate::utils;
+use crate::utils::{self, backoff};
 
 pub async fn get_image_from_immich(client: Client, base_path: String) -> anyhow::Result<String> {
     let immich_base_path = env::var("IMMICH_ENDPOINT")?;
@@ -86,12 +87,42 @@ async fn download_asset(
     checksum: String,
 ) -> anyhow::Result<()> {
     println!("Downloading asset");
-    let raw = client.get(url).send().await?.bytes().await?;
-    fs::write(path.clone(), raw)?;
-    if !utils::checksum::check_checksum_of_file(path.clone(), checksum)? {
-        println!("Checksum invalid after download, uuuh");
+    let mut tries = 1;
+    // exponential backoff counter
+    let mut retry_duration: u64 = 0;
+    let mut continue_trying = true;
+
+    while (tries <= 5) && continue_trying {
+        println!("Attempt {tries}");
+        let res = match client.get(&url).send().await {
+            Ok(res) => res,
+            Err(e) => {
+                println!("Encountered error: {e} marking as failed");
+                backoff::backoff_delay(&mut retry_duration, &tries).await;
+                tries += 1;
+                continue;
+            }
+        };
+
+        let raw = match res.bytes().await {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                println!("Encountered error: {e} marking as failed");
+                backoff::backoff_delay(&mut retry_duration, &tries).await;
+                tries += 1;
+                continue;
+            }
+        };
+        fs::write(path.clone(), raw)?;
+        if !utils::checksum::check_checksum_of_file(path.clone(), checksum.clone())? {
+            println!("Checksum invalid after download, uuuh. Marking as failed");
+            backoff::backoff_delay(&mut retry_duration, &tries).await;
+            tries += 1;
+            continue;
+        }
+        println!("Downloaded asset to {path}");
+        continue_trying = false;
     }
-    println!("Downloaded asset to {path}");
     return Ok(());
 }
 
