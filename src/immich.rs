@@ -1,22 +1,22 @@
 use anyhow::Error;
 use rand::Rng;
-use reqwest::{blocking::Client, StatusCode};
+use reqwest::{Client, StatusCode};
 use serde::Deserialize;
 use std::{env, fs};
 
 use crate::utils;
 
-pub fn get_image_from_immich(client: Client, base_path: String) -> anyhow::Result<String> {
+pub async fn get_image_from_immich(client: Client, base_path: String) -> anyhow::Result<String> {
     let immich_base_path = env::var("IMMICH_ENDPOINT")?;
     let immich_album_id = env::var("IMMICH_ALBUM")?;
 
     let album = client
         .get(format!("{immich_base_path}/api/albums/{immich_album_id}"))
         .send()
-        .unwrap();
+        .await?;
     match album.status() {
         StatusCode::OK => {
-            let res = album.json::<ImmichAlbumGetOK>()?;
+            let res = album.json::<ImmichAlbumGetOK>().await?;
 
             let mut continue_looping = true;
             let mut final_path = String::new();
@@ -51,7 +51,8 @@ pub fn get_image_from_immich(client: Client, base_path: String) -> anyhow::Resul
                             format!("{immich_base_path}/api/assets/{}/original", asset.id),
                             path.clone(),
                             asset.checksum.clone(),
-                        )?;
+                        )
+                        .await?;
                     }
                 } else {
                     download_asset(
@@ -59,14 +60,15 @@ pub fn get_image_from_immich(client: Client, base_path: String) -> anyhow::Resul
                         format!("{immich_base_path}/api/assets/{}/original", asset.id),
                         path.clone(),
                         asset.checksum.clone(),
-                    )?;
+                    )
+                    .await?;
                     final_path = path;
                 }
             }
             Ok(final_path)
         }
         _ => {
-            let res = album.json::<ImmichRequestBad>()?;
+            let res = album.json::<ImmichRequestBad>().await?;
             return Err(Error::msg(format!(
                 "{}: {}\n(correlation ID: {})",
                 res.status_code,
@@ -77,14 +79,14 @@ pub fn get_image_from_immich(client: Client, base_path: String) -> anyhow::Resul
     }
 }
 
-fn download_asset(
+async fn download_asset(
     client: Client,
     url: String,
     path: String,
     checksum: String,
 ) -> anyhow::Result<()> {
     println!("Downloading asset");
-    let raw = client.get(url).send()?.bytes()?;
+    let raw = client.get(url).send().await?.bytes().await?;
     fs::write(path.clone(), raw)?;
     if !utils::checksum::check_checksum_of_file(path.clone(), checksum)? {
         println!("Checksum invalid after download, uuuh");

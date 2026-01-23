@@ -22,7 +22,8 @@ struct Args {
     resize_mode: String,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     // Load configuration from env file
@@ -41,13 +42,13 @@ fn main() {
         header::HeaderValue::from_str(&env::var("IMMICH_API_KEY").unwrap()).unwrap(),
     );
 
-    let client = reqwest::blocking::Client::builder()
+    let client = reqwest::Client::builder()
         .default_headers(headers)
         .build()
         .unwrap();
 
     // try to download a new photo from immich
-    let image_path = match immich::get_image_from_immich(client, cache_dir_root.clone()) {
+    let image_path = match immich::get_image_from_immich(client, cache_dir_root.clone()).await {
         Ok(path) => path,
         Err(e) => {
             println!("{e}");
@@ -57,7 +58,7 @@ fn main() {
                 .collect();
             if files.is_empty() {
                 println!("{e}");
-                return;
+                return Ok(());
             }
 
             let mut rng = rand::rng();
@@ -70,4 +71,5 @@ fn main() {
     };
 
     sway::issue_bg_update(image_path, args.swww_path, args.resize_mode);
+    Ok(())
 }
