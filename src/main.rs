@@ -1,6 +1,7 @@
 use std::{env, fs};
 
 use clap::Parser;
+use log::{error, info};
 use rand::Rng;
 use reqwest::header;
 
@@ -29,6 +30,8 @@ async fn main() -> anyhow::Result<()> {
     // Load configuration from env file
     let env_file_path = args.env_file_path.unwrap_or_else(|| String::from(".env"));
     dotenv::from_filename(env_file_path).unwrap();
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+
     let cache_dir_root = format!(
         "{}/{}",
         env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| String::from("/run")),
@@ -51,21 +54,22 @@ async fn main() -> anyhow::Result<()> {
     let image_path = match immich::get_image_from_immich(client, cache_dir_root.clone()).await {
         Ok(path) => path,
         Err(e) => {
-            println!("{e}");
+            error!("{e}");
             let files: Vec<fs::DirEntry> = fs::read_dir(cache_dir_root)
                 .unwrap()
                 .filter_map(Result::ok)
                 .collect();
             if files.is_empty() {
-                println!("{e}");
+                error!("{e}");
                 return Ok(());
             }
 
             let mut rng = rand::rng();
             let idx = rng.random_range(0..files.len());
-            println!("Picked asset num {}", idx);
+            info!("Picked asset num {}", idx);
             let asset = &files[idx];
 
+            info!("Loading asset from {:?}", asset.path());
             asset.path().to_str().unwrap().to_string()
         }
     };

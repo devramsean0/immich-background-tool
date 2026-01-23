@@ -1,9 +1,9 @@
 use anyhow::Error;
+use log::{debug, error, info, warn};
 use rand::Rng;
 use reqwest::{Client, StatusCode};
 use serde::Deserialize;
-use std::{env, fs};
-use tokio::time::{sleep, Duration};
+use std::{env, fs, process::exit};
 
 use crate::utils::{self, backoff};
 
@@ -11,10 +11,17 @@ pub async fn get_image_from_immich(client: Client, base_path: String) -> anyhow:
     let immich_base_path = env::var("IMMICH_ENDPOINT")?;
     let immich_album_id = env::var("IMMICH_ALBUM")?;
 
-    let album = client
+    let album = match client
         .get(format!("{immich_base_path}/api/albums/{immich_album_id}"))
         .send()
-        .await?;
+        .await
+    {
+        Ok(res) => res,
+        Err(e) => {
+            error!("Error retrieving album data: {e}");
+            return Err(Error::msg(format!("Error retreiving Album metadata: {e}")));
+        }
+    };
     match album.status() {
         StatusCode::OK => {
             let res = album.json::<ImmichAlbumGetOK>().await?;
@@ -22,17 +29,17 @@ pub async fn get_image_from_immich(client: Client, base_path: String) -> anyhow:
             let mut continue_looping = true;
             let mut final_path = String::new();
             while continue_looping {
-                println!("Assets in Album: {}", res.asset_count);
+                debug!("Assets in Album: {}", res.asset_count);
                 if res.assets.is_empty() {
                     return Err(Error::msg("Album contains no assets"));
                 }
                 let mut rng = rand::rng();
                 let idx = rng.random_range(0..res.assets.len());
-                println!("Picked asset num {}", idx);
+                debug!("Picked asset num {}", idx);
                 let asset = &res.assets[idx];
 
                 if asset.asset_type != ImmichAssetType::IMAGE {
-                    println!("Asset not image");
+                    warn!("Asset not image");
                     continue;
                 }
 
@@ -44,7 +51,7 @@ pub async fn get_image_from_immich(client: Client, base_path: String) -> anyhow:
                         path.clone(),
                         asset.checksum.clone(),
                     )? {
-                        println!("Asset already exists, skipping download");
+                        debug!("Asset already exists, skipping download");
                         return Ok(path);
                     } else {
                         download_asset(
@@ -86,18 +93,18 @@ async fn download_asset(
     path: String,
     checksum: String,
 ) -> anyhow::Result<()> {
-    println!("Downloading asset");
+    info!("Downloading asset");
     let mut tries = 1;
     // exponential backoff counter
     let mut retry_duration: u64 = 0;
     let mut continue_trying = true;
 
     while (tries <= 5) && continue_trying {
-        println!("Attempt {tries}");
+        debug!("Attempt {tries}");
         let res = match client.get(&url).send().await {
             Ok(res) => res,
             Err(e) => {
-                println!("Encountered error: {e} marking as failed");
+                error!("Encountered error making download request: {e} marking as failed");
                 backoff::backoff_delay(&mut retry_duration, &tries).await;
                 tries += 1;
                 continue;
@@ -107,7 +114,7 @@ async fn download_asset(
         let raw = match res.bytes().await {
             Ok(bytes) => bytes,
             Err(e) => {
-                println!("Encountered error: {e} marking as failed");
+                error!("Encountered error converting to bytes during download request: {e} marking as failed");
                 backoff::backoff_delay(&mut retry_duration, &tries).await;
                 tries += 1;
                 continue;
@@ -115,12 +122,12 @@ async fn download_asset(
         };
         fs::write(path.clone(), raw)?;
         if !utils::checksum::check_checksum_of_file(path.clone(), checksum.clone())? {
-            println!("Checksum invalid after download, uuuh. Marking as failed");
+            error!("Checksum invalid after download, uuuh. Marking as failed");
             backoff::backoff_delay(&mut retry_duration, &tries).await;
             tries += 1;
             continue;
         }
-        println!("Downloaded asset to {path}");
+        info!("Downloaded asset to {path}");
         continue_trying = false;
     }
     return Ok(());
